@@ -1,0 +1,348 @@
+<!doctype html>
+<html>
+<head>
+<title>Tip Pool</title>
+<style>
+body {
+  font-family: helvetica;
+  margin: 30px;
+}
+section {
+  border: 2px solid grey;
+  border-radius: 6px;
+  padding: 10px;
+  margin: 10px 10px 10px 0;
+  display: flex;
+}
+aside {
+  justify-content: space-between;
+  flex-basis: 50%;
+  padding: 4px 18px;
+}
+input {
+  display: block;
+  margin: 10px 0 20px 0;
+  border-radius: 5px;
+  border: 1px solid grey;
+  font-size: 20px;
+  padding: 6px;
+}
+button {
+  cursor: pointer;
+  width: 90px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid grey;
+  font-size: 16px;
+}
+td {
+  text-align: center;
+  border: 1px solid grey;
+}
+table {
+  margin: 50px 0;
+  border-collapse: collapse;
+  padding: 4px;
+  width: 80%;
+}
+#idSummary td {
+  border: none;
+}
+.deleteBtn {
+  cursor: pointer;
+}  
+</style>
+<!--JS for Jasmine standalone 5.1.1:not forget to include lib/ folder-->
+<link rel="shortcut icon" type="image/png" href="lib/jasmine-5.1.1/jasmine_favicon.png">
+<link rel="stylesheet" href="lib/jasmine-5.1.1/jasmine.css">
+<script src="lib/jasmine-5.1.1/jasmine.js"></script>
+<script src="lib/jasmine-5.1.1/jasmine-html.js"></script>
+<script src="lib/jasmine-5.1.1/boot0.js"></script>
+<script src="lib/jasmine-5.1.1/boot1.js"></script><!--optional:configure Jasmine env-->
+<!-- JS for Jasmine standalone library-->
+</head>
+<body>
+  <h2>Tip Pool</h2>
+  <section>
+    <aside>
+      <h4>Input payment info</h4>
+      <form id="idPayment">
+        <label for="idBill">Bill Amount</label>
+        <input type="number" id="idBill" autofocus />
+        <label for="idTip">Tip Amount</label>
+        <input type="number" id="idTip" />
+        <button>Submit</button>
+      </form>
+      <table id="idPaymentTable">
+        <thead><tr><th>Bill-Amt</th><th>Tip-Amt</th><th>Tip %</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </aside>
+    <aside>
+      <h4>Input server info</h4>
+      <form id="idServer">
+        <label for="idName">Server Name</label>
+        <input id="idName" />
+        <button>Submit</button>
+      </form>
+      <table id="idNameTable">
+        <thead><tr><th>Server Name</th><th>Earnings</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </aside>
+  </section>
+  <section id="idSummary">
+    <h3>Shift summary</h3>
+    <table id="idSummaryTable">
+      <thead><tr><th>Bill total</th><th>Tip total</th><th>Tip percent avg</th></tr></thead>
+      <tbody><tr><td></td><td></td><td></td></tr></tbody>
+    </table>
+  </section>
+  
+<script>
+let billInput= document.getElementById('idBill')
+let tipInput = document.getElementById('idTip')
+let paymentForm = document.getElementById('idPayment')
+let paymentTbody= document.querySelector('#idPaymentTable tbody')
+let summaryTds  = document.querySelectorAll('#idSummaryTable tbody tr td')
+let allPayments = {}
+let paymentId = 0
+paymentForm.addEventListener('submit',paymentInfo)
+function paymentInfo(evt){//Add a curPayment object to allPayments,update html & reset input values
+  if (evt) evt.preventDefault()// when running tests there is no event
+  let curPayment = createCurPayment()
+  if (curPayment) {
+    paymentId++
+    allPayments['payment' + paymentId] = curPayment
+    appendPaymentTable(curPayment)
+    updateServerTable()
+    updateSummary()
+    billInput.value = ''
+    tipInput.value = ''
+  }
+}
+function createCurPayment(){
+  let billAmt = billInput.value
+  let tipAmt = tipInput.value
+  if (billAmt=='' || tipAmt=='') return//return undefined for negative or empty inputs
+  if (Number(billAmt) > 0 && Number(tipAmt) >= 0) {
+    return {
+      billAmt: billAmt,
+      tipAmt: tipAmt,
+      tipPercent: calculateTipPercent(billAmt, tipAmt)
+    }
+  }
+}
+function appendPaymentTable(curPayment){//Create tr & pass to appendTd with input value
+  let newTr = document.createElement('tr')
+  newTr.id = 'payment' + paymentId
+  appendTd(newTr, '$' + curPayment.billAmt)
+  appendTd(newTr, '$' + curPayment.tipAmt)
+  appendTd(newTr, '%' + curPayment.tipPercent)
+  appendDeleteBtn(newTr, 'payment')
+  paymentTbody.append(newTr)
+}
+function updateSummary(){//Create tr & pass to appendTd with calculated sum of all payment
+  let tipPercentAvg = sumPaymentTotal('tipPercent') / Object.keys(allPayments).length
+  summaryTds[0].innerHTML = '$' + sumPaymentTotal('billAmt')
+  summaryTds[1].innerHTML = '$' + sumPaymentTotal('tipAmt')
+  summaryTds[2].innerHTML = Math.round(tipPercentAvg) + '%'
+}
+
+let nameInput = document.getElementById('idName')
+let serverForm = document.getElementById('idServer')
+let serverTbody = document.querySelector('#idNameTable tbody')
+let allServers = {}
+let serverId = 0
+serverForm.addEventListener('submit', submitServerInfo)
+function submitServerInfo(evt){//create server object and add to allServers,update html & reset input
+  if (evt) evt.preventDefault()//when running tests there is no event
+  let serverName = nameInput.value
+  if (serverName!==''){
+    serverId++
+    allServers['server' + serverId] = { serverName }
+    updateServerTable()
+    nameInput.value = ''
+  }
+}
+function updateServerTable(){//Create tr & pass to appendTd() with input value
+  serverTbody.innerHTML = ''
+  for (let key in allServers) {
+    let curServer = allServers[key]
+    let newTr = document.createElement('tr')
+    newTr.setAttribute('id', key)
+    let tipAverage = sumPaymentTotal('tipAmt') / Object.keys(allServers).length
+    appendTd(newTr, curServer.serverName)
+    appendTd(newTr, '$' + tipAverage.toFixed(2))
+    appendDeleteBtn(newTr, 'server')
+    serverTbody.append(newTr)
+  }
+}
+
+function sumPaymentTotal(type){//accepts 'tipAmt','billAmt','tipPercent' & sums total from allPayments objects
+  let total = 0
+  for (let key in allPayments) {
+    let payment = allPayments[key]
+    total += Number(payment[type])
+  }
+  return total
+}
+function calculateTipPercent(billAmt,tipAmt){//converts bill & tip into tip %
+  return Math.round(100/(billAmt/tipAmt))
+}
+function appendTd(tr,value){//expects tr, appends newly created td from value
+  let newTd = document.createElement('td')
+  newTd.innerText = value
+  tr.append(newTd)
+}
+function appendDeleteBtn(tr,type){//append delete button & click handler for removing name from allServers & DOM td
+  let newTd = document.createElement('td')
+  newTd.className = 'deleteBtn'
+  newTd.innerText = 'X'
+  newTd.addEventListener('click', removeEle)
+  tr.append(newTd)
+}
+function removeEle(evt) {
+  let ele = evt.target.closest('tr')
+  delete allServers[ele.id]
+  ele.parentNode.removeChild(ele)
+  updateServerTable()
+}
+</script>
+
+<!-- <script src="script.test.js"></script>  -->
+<script>
+describe("Test payments(with setup & tear-down)",()=>{
+  beforeEach(()=>{
+    billInput.value = 100
+    tipInput.value = 20
+  })
+  it('should add new payment to allPayments on paymentInfo()',()=>{
+    paymentInfo()
+    expect(Object.keys(allPayments).length).toEqual(1)
+    expect(allPayments['payment1'].billAmt).toEqual('100')
+    expect(allPayments['payment1'].tipAmt).toEqual('20')
+    expect(allPayments['payment1'].tipPercent).toEqual(20)
+  })
+  it('should not add empty bill or tip',()=>{
+    billInput.value = ''
+    paymentInfo()
+    expect(Object.keys(allPayments).length).toEqual(0)
+  })
+  it('should payment update #idPaymentTable on appendPaymentTable()',()=>{
+    let curPayment = createCurPayment()
+    allPayments['payment1'] = curPayment
+    appendPaymentTable(curPayment)
+    let curTdList = document.querySelectorAll('#idPaymentTable tbody tr td')
+    expect(curTdList.length).toEqual(4)
+    expect(curTdList[0].innerText).toEqual('$100')
+    expect(curTdList[1].innerText).toEqual('$20')
+    expect(curTdList[2].innerText).toEqual('%20')
+    expect(curTdList[3].innerText).toEqual('X')
+  })
+  it('should create new payment on createCurPayment()',()=>{
+    expect(createCurPayment()).toEqual({billAmt: '100',tipAmt: '20',tipPercent: 20})
+  })
+  it('should not create payment with empty input on createCurPayment()',()=>{
+    billInput.value = ''
+    tipInput.value = ''
+    let curPayment = createCurPayment()
+    expect(curPayment).toEqual(undefined)
+  })
+  afterEach(()=>{
+    billInput.value = ''
+    tipInput.value = ''
+    paymentTbody.innerHTML = ''
+    summaryTds[0].innerHTML = ''
+    summaryTds[1].innerHTML = ''
+    summaryTds[2].innerHTML = ''
+    serverTbody.innerHTML = ''
+    paymentId = 0
+    allPayments = {}
+  })
+})
+describe("Test server name input(with setup and tear-down)",()=>{
+  beforeEach(()=>nameInput.value = 'Alice')
+  it('should add new server to allServers on submitServerInfo()',()=>{
+    submitServerInfo()
+    expect(Object.keys(allServers).length).toEqual(1)
+    expect(allServers['server' + serverId].serverName).toEqual('Alice')
+  })
+  it('should not add empty name on submitServerInfo()',()=>{
+    nameInput.value = ''
+    submitServerInfo()
+    expect(Object.keys(allServers).length).toEqual(0)
+  })
+  it('should update #idNameTable on updateServerTable()',()=>{
+    submitServerInfo()
+    updateServerTable()
+    let curTdList = document.querySelectorAll('#idNameTable tbody tr td')
+    expect(curTdList.length).toEqual(3)
+    expect(curTdList[0].innerText).toEqual('Alice')
+    expect(curTdList[1].innerText).toEqual('$0.00')
+    expect(curTdList[2].innerText).toEqual('X')
+  })
+  afterEach(function() {
+    serverId = 0
+    serverTbody.innerHTML = ''
+    allServers = {}
+  })
+})
+describe("Test other functions(with setup & tear-down)",()=>{
+  beforeEach(()=>{
+    billInput.value = 100
+    tipInput.value = 20
+    paymentInfo()
+  })
+  it('should sum total tip on sumPaymentTotal()',()=>{
+    expect(sumPaymentTotal('tipAmt')).toEqual(20)
+    billInput.value = 200
+    tipInput.value = 5
+    paymentInfo()
+    expect(sumPaymentTotal('tipAmt')).toEqual(25)
+  })
+  it('should sum total bill on sumPaymentTotal()',()=>{
+    expect(sumPaymentTotal('billAmt')).toEqual(100)
+    billInput.value = 50
+    tipInput.value = 10
+    paymentInfo()
+    expect(sumPaymentTotal('billAmt')).toEqual(150)
+  })
+  it('should sum total tip % on sumPaymentTotal()',()=>{
+    expect(sumPaymentTotal('tipPercent')).toEqual(20)
+    billInput.value = 100
+    tipInput.value = 8
+    paymentInfo()
+    expect(sumPaymentTotal('tipPercent')).toEqual(28)
+  })
+  it('should calculate tip % of a single tip on calculateTipPercent()',()=>{
+    expect(calculateTipPercent(100, 23)).toEqual(23)
+    expect(calculateTipPercent(100, 11)).toEqual(11)
+  })
+  it('should generate new td from value and append to tr on appendTd(tr, value)',()=>{
+    let newTr = document.createElement('tr')
+    appendTd(newTr, 'rowA')
+    expect(newTr.children.length).toEqual(1)
+    expect(newTr.firstChild.innerHTML).toEqual('rowA')
+  })
+  it('should generate delete td and append to tr on appendDeleteBtn(tr, type)',()=>{
+    let newTr = document.createElement('tr')
+    appendDeleteBtn(newTr)
+    expect(newTr.children.length).toEqual(1)
+    expect(newTr.firstChild.innerHTML).toEqual('X')
+  })
+  afterEach(()=>{
+    billInput.value = ''
+    tipInput.value = ''
+    paymentTbody.innerHTML = ''
+    summaryTds[0].innerHTML = ''
+    summaryTds[1].innerHTML = ''
+    summaryTds[2].innerHTML = ''
+    serverTbody.innerHTML = ''
+    allPayments = {}
+    paymentId = 0
+  })
+})
+</script>
+</body>
+</html>
